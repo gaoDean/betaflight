@@ -1112,6 +1112,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_GPS_USE_3D_SPEED,           VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, gps_use_3d_speed) },
     { PARAM_NAME_GPS_SBAS_INTEGRITY,         VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },         PG_GPS_CONFIG, offsetof(gpsConfig_t, sbas_integrity) },
     { PARAM_NAME_GPS_NMEA_CUSTOM_COMMANDS,   VAR_UINT8  | MASTER_VALUE | MODE_STRING, .config.string = { 1, NMEA_CUSTOM_COMMANDS_MAX_LENGTH, STRING_FLAGS_NONE }, PG_GPS_CONFIG, offsetof(gpsConfig_t, nmeaCustomCommands) },
+    { PARAM_NAME_GPS_NMEA_CUSTOM_BAUD,       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_BAUD_RATES }, PG_GPS_CONFIG, offsetof(gpsConfig_t, nmeaCustomTargetBaudIndex) },
 
 #ifdef USE_GPS_RESCUE
 #ifndef USE_WING

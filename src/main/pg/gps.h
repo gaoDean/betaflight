@@ -41,6 +41,7 @@ typedef struct gpsConfig_s {
     bool sbas_integrity;
     uint8_t gps_ublox_utc_standard;
     char nmeaCustomCommands[NMEA_CUSTOM_COMMANDS_MAX_LENGTH + 1];
+    baudRate_e nmeaCustomTargetBaudIndex;
 } gpsConfig_t;
 
 PG_DECLARE(gpsConfig_t, gpsConfig);

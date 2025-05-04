@@ -49,6 +49,7 @@ PG_RESET_TEMPLATE(gpsConfig_t, gpsConfig,
     .sbas_integrity = false,
     .gps_ublox_utc_standard = UBLOX_UTC_STANDARD_AUTO,
     .nmeaCustomCommands = "",
+    .nmeaCustomTargetBaudIndex = BAUD_9600,
 );
 
 #endif // USE_GPS

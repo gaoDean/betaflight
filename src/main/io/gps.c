@@ -1022,10 +1022,10 @@ static void gpsConfigureNmea(void)
                 commandOffset = 0;
             }
         } else if (gpsData.state_position < 3) {
-            // Step 3: Change FC baud rate to the target rate (57600).
-            // NOTE: This assumes the custom command successfully changed the GPS to 57600 baud.
-            // NOTE: The target baud rate 57600 is hardcoded here. Consider making this configurable if needed.
-            baudRate_e targetBaudIndex = BAUD_57600;
+            // Step 3: Change FC baud rate to the target rate specified by the user.
+            // NOTE: This assumes the custom command successfully changed the GPS to the target baud rate.
+            // Read the target baud rate index from the configuration
+            baudRate_e targetBaudIndex = gpsConfig()->nmeaCustomTargetBaudIndex; // <-- Use config value instead of BAUD_57600
             serialSetBaudRate(gpsPort, baudRates[targetBaudIndex]);
             gpsData.state_position++; // Moves to state_position 3
         } else { // state_position >= 3
@@ -2135,8 +2135,7 @@ static uint8_t ubxRcvMsgID;
 static uint16_t ubxRcvMsgPayloadLength;
 // - Payload, each message type has its own payload field layout, represented by the elements of this union.
 //   Note that the size of the buffer is determined by the longest possible payload, currently UBX-NAV-SAT.
-//   See size define comments above. Warning, this is fragile! If another message type becomes the largest
-//   payload instead of UBX-NAV-SAT, UBLOX_PAYLOAD_SIZE above needs to be adjusted!
+//   See size define comments above. Warning, this is fragile! If another message type becomes the largest payload instead of UBX-NAV-SAT, UBLOX_PAYLOAD_SIZE above needs to be adjusted!
 static union {
     ubxNavPosllh_t ubxNavPosllh;
     ubxNavStatus_t ubxNavStatus;
