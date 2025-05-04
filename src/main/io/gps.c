@@ -959,6 +959,7 @@ static void gpsConfigureNmea(void)
     // - set the FC's GPS port to the user's configured rate (initial rate, e.g. 9600), and
     // - send any NMEA custom commands to the GPS Module (e.g. to change rate to 57600)
     // - set the FC's GPS port to the target rate (e.g. 57600)
+    // - CUSTOM CHANGES
     DEBUG_SET(DEBUG_GPS_CONNECTION, 4, (gpsData.state * 100 + gpsData.state_position));
 
     // wait 500ms between changes
