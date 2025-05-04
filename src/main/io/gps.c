@@ -964,10 +964,9 @@ static void setSatInfoMessageRate(uint8_t divisor)
 static void gpsConfigureNmea(void)
 {
     // minimal support for NMEA, we only:
-    // - set the FC's GPS port to the user's configured rate, and
-    // - send any NMEA custom commands to the GPS Module
-    // the user must configure the power-up baud rate of the module to be fast enough for their data rate
-    // Note: we always parse all incoming NMEA messages
+    // - set the FC's GPS port to the user's configured rate (initial rate, e.g. 9600), and
+    // - send any NMEA custom commands to the GPS Module (e.g. to change rate to 57600)
+    // - set the FC's GPS port to the target rate (e.g. 57600)
     DEBUG_SET(DEBUG_GPS_CONNECTION, 4, (gpsData.state * 100 + gpsData.state_position));
 
     // wait 500ms between changes
@@ -984,19 +983,19 @@ static void gpsConfigureNmea(void)
     switch (gpsData.state) {
 
     case GPS_STATE_DETECT_BAUD:
-        // no attempt to read the baud rate of the GPS module, or change it
+        // Assume initial rate is set correctly via user config (e.g., 9600)
         gpsSetState(GPS_STATE_CHANGE_BAUD);
         break;
 
     case GPS_STATE_CHANGE_BAUD:
 #if !defined(GPS_NMEA_TX_ONLY)
         if (gpsData.state_position < 1) {
-            // set the FC's baud rate to the user's configured baud rate
+            // Step 1: Set the FC's baud rate initially to the user's configured rate (assumed 9600).
+            // This ensures we talk to the GPS at its default rate first.
             serialSetBaudRate(gpsPort, baudRates[gpsInitData[gpsData.userBaudRateIndex].baudrateIndex]);
             gpsData.state_position++;
         } else if (gpsData.state_position < 2) {
-            // send NMEA custom commands to select which messages being sent, data rate etc
-            // use PUBX, MTK, SiRF or GTK format commands, depending on module type
+            // Step 2: Send NMEA custom commands (at the initial rate, e.g., 9600).
             static int commandOffset = 0;
             const char *commands = gpsConfig()->nmeaCustomCommands;
             const char *cmd = commands + commandOffset;
@@ -1015,16 +1014,27 @@ static void gpsConfigureNmea(void)
             // skip trailing whitespaces
             while (*cmd && strcspn(cmd, " \0") == 0) cmd++;
             if (*cmd) {
-                // more commands to send
+                // more commands to send in the next iteration
                 commandOffset = cmd - commands;
             } else {
-                gpsData.state_position++;
+                // All commands sent, move to the next step to change FC baud rate
+                gpsData.state_position++; // Moves to state_position 2
                 commandOffset = 0;
             }
-            gpsData.state_position++;
-            gpsSetState(GPS_STATE_RECEIVING_DATA);
+        } else if (gpsData.state_position < 3) {
+            // Step 3: Change FC baud rate to the target rate (57600).
+            // NOTE: This assumes the custom command successfully changed the GPS to 57600 baud.
+            // NOTE: The target baud rate 57600 is hardcoded here. Consider making this configurable if needed.
+            baudRate_e targetBaudIndex = BAUD_57600;
+            serialSetBaudRate(gpsPort, baudRates[targetBaudIndex]);
+            gpsData.state_position++; // Moves to state_position 3
+        } else { // state_position >= 3
+             // Step 4: Configuration complete, transition to receiving data at the new rate.
+             gpsSetState(GPS_STATE_RECEIVING_DATA);
         }
 #else // !GPS_NMEA_TX_ONLY
+        // If TX is disabled, just go straight to receiving data at the configured rate
+        serialSetBaudRate(gpsPort, baudRates[gpsInitData[gpsData.userBaudRateIndex].baudrateIndex]);
         gpsSetState(GPS_STATE_RECEIVING_DATA);
 #endif // !GPS_NMEA_TX_ONLY
         break;
@@ -2543,16 +2553,6 @@ bool gpsPassthrough(serialPort_t *gpsPassthroughPort)
     }
 
 #ifdef USE_DASHBOARD
-    if (featureIsEnabled(FEATURE_DASHBOARD)) {
-        // Should be handled via a generic callback hook, so the GPS module doesn't have to be coupled to the dashboard module.
-        dashboardShowFixedPage(PAGE_GPS);
-    }
-#endif
-
-    serialPassthrough(gpsPort, gpsPassthroughPort, &gpsHandlePassthrough, NULL);
-    // allow exitting passthrough mode in future
-    return true;
-}
 
 float GPS_cosLat = 1.0f;  // this is used to offset the shrinking longitude as we go towards the poles
                           // longitude difference * scale is approximate distance in degrees
