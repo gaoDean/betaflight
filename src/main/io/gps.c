@@ -2553,6 +2553,16 @@ bool gpsPassthrough(serialPort_t *gpsPassthroughPort)
     }
 
 #ifdef USE_DASHBOARD
+    if (featureIsEnabled(FEATURE_DASHBOARD)) {
+        // Should be handled via a generic callback hook, so the GPS module doesn't have to be coupled to the dashboard module.
+        dashboardShowFixedPage(PAGE_GPS);
+    }
+#endif
+
+    serialPassthrough(gpsPort, gpsPassthroughPort, &gpsHandlePassthrough, NULL);
+    // allow exitting passthrough mode in future
+    return true;
+}
 
 float GPS_cosLat = 1.0f;  // this is used to offset the shrinking longitude as we go towards the poles
                           // longitude difference * scale is approximate distance in degrees
