@@ -953,13 +953,12 @@ void setSatInfoMessageRate(uint8_t divisor)
 #endif // USE_GPS_UBLOX
 
 #ifdef USE_GPS_NMEA
-void gpsConfigureNmea(void)
+static void gpsConfigureNmea(void)
 {
     // minimal support for NMEA, we only:
-    // - set the FC's GPS port to the user's configured rate, and 
-    // - send any NMEA custom commands to the GPS Module
-    // the user must configure the power-up baud rate of the module to be fast enough for their data rate
-    // Note: we always parse all incoming NMEA messages
+    // - set the FC's GPS port to the user's configured rate (initial rate, e.g. 9600), and
+    // - send any NMEA custom commands to the GPS Module (e.g. to change rate to 57600)
+    // - set the FC's GPS port to the target rate (e.g. 57600)
     DEBUG_SET(DEBUG_GPS_CONNECTION, 4, (gpsData.state * 100 + gpsData.state_position));
 
     // wait 500ms between changes
@@ -975,51 +974,63 @@ void gpsConfigureNmea(void)
 
     switch (gpsData.state) {
 
-        case GPS_STATE_DETECT_BAUD:
-            // no attempt to read the baud rate of the GPS module, or change it
-            gpsSetState(GPS_STATE_CHANGE_BAUD);
-            break;
+    case GPS_STATE_DETECT_BAUD:
+        // Assume initial rate is set correctly via user config (e.g., 9600)
+        gpsSetState(GPS_STATE_CHANGE_BAUD);
+        break;
 
-        case GPS_STATE_CHANGE_BAUD:
+    case GPS_STATE_CHANGE_BAUD:
 #if !defined(GPS_NMEA_TX_ONLY)
-            if (gpsData.state_position < 1) {
-                // set the FC's baud rate to the user's configured baud rate
-                serialSetBaudRate(gpsPort, baudRates[gpsInitData[gpsData.userBaudRateIndex].baudrateIndex]);
-                gpsData.state_position++;
-            } else if (gpsData.state_position < 2) {
-                // send NMEA custom commands to select which messages being sent, data rate etc
-                // use PUBX, MTK, SiRF or GTK format commands, depending on module type
-                static int commandOffset = 0;
-                const char *commands = gpsConfig()->nmeaCustomCommands;
-                const char *cmd = commands + commandOffset;
-                // skip leading whitespaces and get first command length
-                int commandLen;
-                while (*cmd && (commandLen = strcspn(cmd, " \0")) == 0) {
-                    cmd++;  // skip separators
-                }
-                if (*cmd) {
-                    // Send the current command to the GPS
-                    serialWriteBuf(gpsPort, (uint8_t *)cmd, commandLen);
-                    serialWriteBuf(gpsPort, (uint8_t *)"\r\n", 2);
-                    // Move to the next command
-                    cmd += commandLen;
-                }
-                // skip trailing whitespaces
-                while (*cmd && strcspn(cmd, " \0") == 0) cmd++;
-                if (*cmd) {
-                    // more commands to send
-                    commandOffset = cmd - commands;
-                } else {
-                    gpsData.state_position++;
-                    commandOffset = 0;
-                }
-                gpsData.state_position++;
-                gpsSetState(GPS_STATE_RECEIVING_DATA);
+        if (gpsData.state_position < 1) {
+            // Step 1: Set the FC's baud rate initially to the user's configured rate (assumed 9600).
+            // This ensures we talk to the GPS at its default rate first.
+            serialSetBaudRate(gpsPort, baudRates[gpsInitData[gpsData.userBaudRateIndex].baudrateIndex]);
+            gpsData.state_position++;
+        } else if (gpsData.state_position < 2) {
+            // Step 2: Send NMEA custom commands (at the initial rate, e.g., 9600).
+            static int commandOffset = 0;
+            const char *commands = gpsConfig()->nmeaCustomCommands;
+            const char *cmd = commands + commandOffset;
+            // skip leading whitespaces and get first command length
+            int commandLen;
+            while (*cmd && (commandLen = strcspn(cmd, " \0")) == 0) {
+                cmd++;  // skip separators
             }
+            if (*cmd) {
+                // Send the current command to the GPS
+                serialWriteBuf(gpsPort, (uint8_t *)cmd, commandLen);
+                serialWriteBuf(gpsPort, (uint8_t *)"\r\n", 2);
+                // Move to the next command
+                cmd += commandLen;
+            }
+            // skip trailing whitespaces
+            while (*cmd && strcspn(cmd, " \0") == 0) cmd++;
+            if (*cmd) {
+                // more commands to send in the next iteration
+                commandOffset = cmd - commands;
+            } else {
+                // All commands sent, move to the next step to change FC baud rate
+                gpsData.state_position++; // Moves to state_position 2
+                commandOffset = 0;
+            }
+        } else if (gpsData.state_position < 3) {
+            // Step 3: Change FC baud rate to the target rate (57600).
+            // NOTE: This assumes the custom command successfully changed the GPS to 57600 baud.
+            // NOTE: The target baud rate 57600 is hardcoded here. Consider making this configurable if needed.
+            baudRate_e targetBaudIndex = BAUD_57600;
+            serialSetBaudRate(gpsPort, baudRates[targetBaudIndex]);
+            gpsData.state_position++; // Moves to state_position 3
+        } else { // state_position >= 3
+             // Step 4: Configuration complete, transition to receiving data at the new rate.
+             gpsSetState(GPS_STATE_RECEIVING_DATA);
+        }
 #else // !GPS_NMEA_TX_ONLY
-            gpsSetState(GPS_STATE_RECEIVING_DATA);
+        // If TX is disabled, just go straight to receiving data at the configured rate
+        serialSetBaudRate(gpsPort, baudRates[gpsInitData[gpsData.userBaudRateIndex].baudrateIndex]);
+        gpsSetState(GPS_STATE_RECEIVING_DATA);
 #endif // !GPS_NMEA_TX_ONLY
-            break;
+        break;
+        // ... other cases ...
     }
 }
 #endif // USE_GPS_NMEA
